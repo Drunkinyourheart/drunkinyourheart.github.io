@@ -4,11 +4,22 @@ title: About
 permalink: /about/
 ---
 
-Some information about you!
+
+
+
+1. I'am a 屌丝.
 
 ### More Information
 
-A place to include any other types of information that you'd like to include about yourself.
+2013-2014 sohu
+   distrubuted crawler
+   recommention system
+2014-now  yeepay
+   bigdata
+   haaoop = hdfs + hbase + zookeeper + spark
+java scala
+
+
 
 ### Contact me
 
