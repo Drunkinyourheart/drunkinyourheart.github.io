@@ -12,11 +12,19 @@ permalink: /about/
 ### More Information
 
 2013-2014 sohu
+
    distrubuted crawler
+
    recommention system
+
 2014-now  yeepay
-   bigdata
-   haaoop = hdfs + hbase + zookeeper + spark
+
+  bigdata
+
+  haaoop = hdfs + hbase + zookeeper + spark
+
+熟悉:
+
 java scala
 
 
