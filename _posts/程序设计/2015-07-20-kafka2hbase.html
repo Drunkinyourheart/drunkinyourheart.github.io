@@ -1,0 +1,858 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<title>Kafka2HBase设计概要</title>
+<!-- 2015-07-19 Sun 12:08 -->
+<meta  http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta  name="generator" content="Org-mode" />
+<meta  name="author" content="Jerry" />
+<style type="text/css">
+ <!--/*--><![CDATA[/*><!--*/
+  .title  { text-align: center; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { color: green; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #ccc;
+    box-shadow: 3px 3px 3px #eee;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: visible;
+    padding-top: 1.2em;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    background-color: white;
+    top: -10px;
+    right: 10px;
+    padding: 3px;
+    border: 1px solid black;
+  }
+  pre.src:hover:before { display: inline;}
+  pre.src-sh:before    { content: 'sh'; }
+  pre.src-bash:before  { content: 'sh'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-R:before     { content: 'R'; }
+  pre.src-perl:before  { content: 'Perl'; }
+  pre.src-java:before  { content: 'Java'; }
+  pre.src-sql:before   { content: 'SQL'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.right  { text-align: center;  }
+  th.left   { text-align: center;   }
+  th.center { text-align: center; }
+  td.right  { text-align: right;  }
+  td.left   { text-align: left;   }
+  td.center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara:nth-child(2) { display: inline; }
+  .footpara { display: block; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  /*]]>*/-->
+</style>
+<link rel="stylesheet" type="text/css" href="css/org.css" />
+<script type="text/javascript">
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this tag.
+
+Copyright (C) 2012-2013 Free Software Foundation, Inc.
+
+The JavaScript code in this tag is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU GPL) as published by the Free Software
+Foundation, either version 3 of the License, or (at your option)
+any later version.  The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+
+@licend  The above is the entire license notice
+for the JavaScript code in this tag.
+*/
+<!--/*--><![CDATA[/*><!--*/
+ function CodeHighlightOn(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(null != target) {
+     elem.cacheClassElem = elem.className;
+     elem.cacheClassTarget = target.className;
+     target.className = "code-highlighted";
+     elem.className   = "code-highlighted";
+   }
+ }
+ function CodeHighlightOff(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(elem.cacheClassElem)
+     elem.className = elem.cacheClassElem;
+   if(elem.cacheClassTarget)
+     target.className = elem.cacheClassTarget;
+ }
+/*]]>*///-->
+</script>
+</head>
+<body>
+<div id="content">
+<h1 class="title">Kafka2HBase设计概要</h1>
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#sec-1">前言</a></li>
+<li><a href="#sec-2">kafka2hbase设计概要：基本概念和术语</a>
+<ul>
+<li><a href="#sec-2-1">kafka相关</a></li>
+<li><a href="#sec-2-2">hbase相关</a></li>
+<li><a href="#sec-2-3">kafka2hbase相关</a></li>
+</ul>
+</li>
+<li><a href="#sec-3">kafka2hbase设计概要：基本工作机制</a>
+<ul>
+<li><a href="#sec-3-1">数据同步架构示意图以及kafka2hbase所处角色</a></li>
+<li><a href="#sec-3-2">工程概要及设计思想</a>
+<ul>
+<li><a href="#sec-3-2-1">设计思想</a></li>
+<li><a href="#sec-3-2-2">保证数据准确性 Marker</a>
+<ul>
+<li><a href="#sec-3-2-2-1">数据结构定义</a></li>
+<li><a href="#sec-3-2-2-2">使用方式方式</a></li>
+<li><a href="#sec-3-2-2-3">释放资源</a></li>
+</ul>
+</li>
+<li><a href="#sec-3-2-3">Streaming-Style HBase客户端封装 HClient</a></li>
+<li><a href="#sec-3-2-4">监控 Monitor</a></li>
+<li><a href="#sec-3-2-5">工程结构（基于maven）</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#sec-4">参考</a></li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-1" class="outline-2">
+<h2 id="sec-1">前言</h2>
+<div class="outline-text-2" id="text-1">
+<p>
+Kafka2HBase目的就是将Kafka的数据实时写到HBase。<br  />
+这很简单，作为基础数据平台，再此强调数据准确，实时等特点，因此有几点还是说下比较好.  <br  />
+比如:<br  />
+</p>
+<ul class="org-ul">
+<li>如何利用高效的内存映射文件实现数据存储和准确性等.<br  />
+</li>
+<li>Streaming-Style HBase客户端封装.<br  />
+</li>
+<li>实时应用程序内部变量监控等.<br  />
+</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-sec-2" class="outline-2">
+<h2 id="sec-2">kafka2hbase设计概要：基本概念和术语</h2>
+<div class="outline-text-2" id="text-2">
+</div><div id="outline-container-sec-2-1" class="outline-3">
+<h3 id="sec-2-1">kafka相关</h3>
+<div class="outline-text-3" id="text-2-1">
+<ul class="org-ul">
+<li>消息，全称为Message，是指在生产者、服务端和消费者之间传输数据。
+</li>
+<li>消息代理：全称为Message Broker，通俗来讲就是指该MQ的服务端或者说服务器。
+</li>
+<li>消息生产者：全称为Message Producer，负责产生消息并发送消息到meta服务器。
+</li>
+<li>消息消费者：全称为Message Consumer，负责消息的消费。
+</li>
+<li>消息的主题：全称为Message Topic，由用户定义并在Broker上配置。producer发送消息到某个topic下，consumer从某个topic下消费消息。
+</li>
+<li>主题的分区：也称为partition，可以把一个topic分为多个分区。每个分区是一个有序，不可变的，顺序递增的commit log
+</li>
+<li>消费者分组：全称为Consumer Group，由多个消费者组成，共同消费一个topic下的消息，每个消费者消费部分消息。这些消费者就组成一个分组，拥有同一个分组名称,通常也称为消费者集群
+</li>
+<li>偏移量：全称为Offset。分区中的消息都有一个递增的id，我们称之为Offset。它唯一标识了分区中的消息。
+</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-sec-2-2" class="outline-3">
+<h3 id="sec-2-2">hbase相关</h3>
+<div class="outline-text-3" id="text-2-2">
+<ul class="org-ul">
+<li>行键：行键在数据行在表里的唯一标识, 并作为检索记录的主键
+</li>
+<li>列族与列：列表示为&lt;列族&gt;:&lt;限定符&gt;
+</li>
+<li>时间戳：对应每次数据操作的时间, 可由系统自动生成, 也可以由用户显示的赋值
+</li>
+<li>Region和Region服务器
+</li>
+<li>HRegionServer一个HRegionServer可以管理多个Region实例
+</li>
+<li>Hmaster作为总控节点
+</li>
+<li>Zookeeper负责调度
+</li>
+<li>HLog 用于灾难恢复
+</li>
+<li>HBase中有两张特殊的Table, -ROOT- 和 .META.
+</li>
+<li>.META. : 记录了用户表的Region信息, .META. 可以有多个region
+</li>
+<li>-ROOT- : 记录了 .META. 表的Region信息, -ROOT- 只有一个region
+</li>
+<li>Zookeeper中记录了 -ROOT- 表的location
+</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-sec-2-3" class="outline-3">
+<h3 id="sec-2-3">kafka2hbase相关</h3>
+<div class="outline-text-3" id="text-2-3">
+<ul class="org-ul">
+<li>markLog 利用内存映射文件实现数据结构size=1的栈，保证数据可靠性
+</li>
+<li>HClient Streaming-Style HBase客户端Java版本封装
+</li>
+<li>monitor 对外暴露实时监控端口
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3" class="outline-2">
+<h2 id="sec-3">kafka2hbase设计概要：基本工作机制</h2>
+<div class="outline-text-2" id="text-3">
+</div><div id="outline-container-sec-3-1" class="outline-3">
+<h3 id="sec-3-1">数据同步架构示意图以及kafka2hbase所处角色</h3>
+<div class="outline-text-3" id="text-3-1">
+
+<div class="figure">
+<p><img src="./img/kafka2hbase.png" alt="kafka2hbase.png" />
+</p>
+<p><span class="figure-number">Figure 1:</span> 此图表示了kafka2hbase在实时同步所处的角色</p>
+</div>
+
+<p>
+PS : 从上图可以看出，kafka2hbase的角色为kafka的消费者，在此我们使用kafka的高级API，将所有的消息偏移，即offset维护在zookeeper。
+</p>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2" class="outline-3">
+<h3 id="sec-3-2">工程概要及设计思想</h3>
+<div class="outline-text-3" id="text-3-2">
+</div><div id="outline-container-sec-3-2-1" class="outline-4">
+<h4 id="sec-3-2-1">设计思想</h4>
+<div class="outline-text-4" id="text-3-2-1">
+<p>
+工程以数据为中心而非程序为中心，程序负责逻辑处理。[是不是感觉说和没说一样:P]
+</p>
+
+<pre class="example">
+                                        monitor[监控程序]
+                                           |
+             [将kafka中json形式             v
+                msg拉取到内存]       [解析json为HBase操作GRUD]
+Kafka高级API &lt;-------------------------  Handler -------------------------------&gt; HClient
+                                           |                                   [实时将数据写入HBase]
+                                           | [通过内存映射文件，实时刷新消息]
+                                           v
+                                         marker
+                                  [update current msg]
+</pre>
+</div>
+</div>
+<div id="outline-container-sec-3-2-2" class="outline-4">
+<h4 id="sec-3-2-2">保证数据准确性 Marker</h4>
+<div class="outline-text-4" id="text-3-2-2">
+<p>
+保存数据准确性，其实无非就是缓存下当前正在处理的数据。
+在上图中，我们的capture使用了内部的一个持久化队列hazelcast。
+有2个目的：
+</p>
+<ul class="org-ul">
+<li>持久化信息，在程序挂掉等情况下，仍然不会丢消息
+</li>
+<li>释放db2MQ的存储压力
+</li>
+</ul>
+<p>
+在kafka2hbase中，我们只需要使用考虑不丢失消息这个问题。因为kafka的本身可以看作持久化队列，同时可以缓存至少一周的数据。<br  />
+所以我们选择利用内存映射文件实现数据结构size=1的栈，保证数据可靠性。<br  />
+实现这样一个持久化数据结构很简单,文件的存储比较有特色，采用MappedByteBuffer做文件读写，MappedByteBuffer是java nio引入的文件内存映射方案，读写性能极高，
+</p>
+</div>
+
+<div id="outline-container-sec-3-2-2-1" class="outline-5">
+<h5 id="sec-3-2-2-1">数据结构定义</h5>
+<div class="outline-text-5" id="text-3-2-2-1">
+<pre class="example">
+import org.apache.log4j.Logger;
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.lang.reflect.Method;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+
+/**
+ * @author Jerry Deng
+ */
+public class Marker {
+
+    private static final Logger LOGGER = Logger.getLogger(Marker.class);
+    private static final int DEFAULT_FILE_LIMIT_LENGTH = 1024 * 1024 * 40;
+    private String fileName;
+    private RandomAccessFile dbRandFile;
+    private FileChannel fc;  //  = dbRandFile.getChannel();
+    private MappedByteBuffer mappedByteBuffer;
+    private File file;
+    private boolean isFirstNull;
+
+    /**
+     * Constructor
+     */
+    public Marker(String fileName) throws IOException {
+        this.fileName = fileName;
+        file = new File(fileName);
+        if (file.exists() == false) {  // 文件不存在，创建文件
+            isFirstNull = true;
+            createLogEntity();
+        } else {
+            dbRandFile = new RandomAccessFile(fileName, "rwd");
+            fc = dbRandFile.getChannel();
+            mappedByteBuffer = fc.map(FileChannel.MapMode.READ_WRITE, 0, this.DEFAULT_FILE_LIMIT_LENGTH);
+            isFirstNull = false;
+        }
+    }
+
+    public void put(String msg) {
+        if (msg == null) {
+            throw new RuntimeException("msg is null");
+        }
+        mappedByteBuffer.position(0);
+        mappedByteBuffer.putInt(msg.getBytes().length);
+        mappedByteBuffer.position(4);
+        mappedByteBuffer.put(msg.getBytes());
+    }
+
+    public String get() {
+        mappedByteBuffer.position(0);
+        byte[] b = new byte[mappedByteBuffer.getInt()];
+        mappedByteBuffer.position(4);
+        mappedByteBuffer.get(b);
+        return new String(b);
+    }
+
+    public int getLength() {
+        mappedByteBuffer.position(0);
+        return mappedByteBuffer.getInt();
+    }
+
+
+    public boolean isFirstNull() {
+        return isFirstNull;
+    }
+
+    public void close() {
+        try {
+            mappedByteBuffer.force();
+            AccessController.doPrivileged(new PrivilegedAction&lt;Object&gt;() {
+                public Object run() {
+                    try {
+                        Method getCleanerMethod = mappedByteBuffer.getClass().getMethod("cleaner", new Class[0]);
+                        getCleanerMethod.setAccessible(true);
+                        sun.misc.Cleaner cleaner = (sun.misc.Cleaner) getCleanerMethod.invoke(mappedByteBuffer,
+                                new Object[0]);
+                        cleaner.clean();
+                    } catch (Exception e) {
+                        LOGGER.error("close logindexy file error:", e);
+                    }
+                    return null;
+                }
+            });
+            fc.close();
+            dbRandFile.close();
+            mappedByteBuffer = null;
+            fc = null;
+            dbRandFile = null;
+        } catch (IOException e) {
+            LOGGER.error("close logindex file error:", e);
+        }
+    }
+
+    private boolean createLogEntity() throws IOException {
+        if (file.createNewFile() == false) {
+            return false;
+        }
+        dbRandFile = new RandomAccessFile(file, "rwd");
+        fc = dbRandFile.getChannel();
+        mappedByteBuffer = fc.map(FileChannel.MapMode.READ_WRITE, 0, this.DEFAULT_FILE_LIMIT_LENGTH);
+        mappedByteBuffer.force();
+        return true;
+    }
+
+}
+</pre>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-2-2" class="outline-5">
+<h5 id="sec-3-2-2-2">使用方式方式</h5>
+<div class="outline-text-5" id="text-3-2-2-2">
+<div class="org-src-container">
+
+<pre class="src src-java"> <span style="color: #add8e6;">// </span><span style="color: #add8e6;">&#23450;&#20041;&#23545;&#35937;</span>
+<span style="color: #9acd32; font-weight: bold;">MaKer</span> <span style="color: #7fffd4; font-weight: bold;">marker</span> = <span style="color: #fa8072;">new</span> <span style="color: #9acd32; font-weight: bold;">Marker</span>(FILE_NAME);
+ <span style="color: #add8e6;">// </span><span style="color: #add8e6;">&#22788;&#29702;&#28040;&#24687;</span>
+<span style="color: #fa8072;">if</span> (!marker.isFirstNull() &amp;&amp; marker.getLength() != 0) {
+    handle(hClientMap).handler(marker.get());
+}
+ <span style="color: #add8e6;">// </span><span style="color: #add8e6;">&#26356;&#26032;&#28040;&#24687;</span>
+marker.put(msg);
+ <span style="color: #add8e6;">// </span><span style="color: #add8e6;">&#35760;&#24471;&#37322;&#25918;&#36164;&#28304;&#21834;&#65292;&#22534;&#22806;&#36164;&#28304;</span>
+marker.close();
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-2-3" class="outline-5">
+<h5 id="sec-3-2-2-3">释放资源</h5>
+<div class="outline-text-5" id="text-3-2-2-3">
+<p>
+关闭资源用到了个技巧，主要是堆外资源的释放应该这样做：
+</p>
+<div class="org-src-container">
+
+<pre class="src src-java"> <span style="color: #ffa07a;">/**</span>
+<span style="color: #ffa07a;"> * &#20851;&#38381;&#32034;&#24341;&#25991;&#20214;</span>
+<span style="color: #ffa07a;"> */</span>
+<span style="color: #fa8072;">public</span> <span style="color: #9acd32; font-weight: bold;">void</span> <span style="color: #7fffd4; font-weight: bold;">close</span>() {
+    <span style="color: #fa8072;">try</span> {
+        mappedByteBuffer.force();
+        AccessController.doPrivileged(<span style="color: #fa8072;">new</span> <span style="color: #9acd32; font-weight: bold;">PrivilegedAction</span>&lt;<span style="color: #9acd32; font-weight: bold;">Object</span>&gt;() {
+            <span style="color: #fa8072;">public</span> <span style="color: #9acd32; font-weight: bold;">Object</span> <span style="color: #7fffd4; font-weight: bold;">run</span>() {
+                <span style="color: #fa8072;">try</span> {
+                    <span style="color: #9acd32; font-weight: bold;">Method</span> <span style="color: #7fffd4; font-weight: bold;">getCleanerMethod</span> = mappedByteBuffer.getClass().getMethod(<span style="color: #ffa07a;">"cleaner"</span>, <span style="color: #fa8072;">new</span> <span style="color: #9acd32; font-weight: bold;">Class</span>[0]);
+                    getCleanerMethod.setAccessible(<span style="color: #7fffd4;">true</span>);
+                    <span style="color: #7fffd4;">sun</span>.<span style="color: #7fffd4;">misc</span>.<span style="color: #9acd32; font-weight: bold;">Cleaner</span> <span style="color: #7fffd4; font-weight: bold;">cleaner</span> = (<span style="color: #7fffd4;">sun</span>.<span style="color: #7fffd4;">misc</span>.<span style="color: #9acd32; font-weight: bold;">Cleaner</span>) getCleanerMethod.invoke(mappedByteBuffer,
+                            <span style="color: #fa8072;">new</span> <span style="color: #9acd32; font-weight: bold;">Object</span>[0]);
+                    cleaner.clean();
+                } <span style="color: #fa8072;">catch</span> (<span style="color: #9acd32; font-weight: bold;">Exception</span> <span style="color: #7fffd4; font-weight: bold;">e</span>) {
+                    log.error(<span style="color: #ffa07a;">"close logindexy file error:"</span>, e);
+                }
+                <span style="color: #fa8072;">return</span> <span style="color: #7fffd4;">null</span>;
+            }
+        });
+        fc.close();
+        dbRandFile.close();
+        mappedByteBuffer = <span style="color: #7fffd4;">null</span>;
+        fc = <span style="color: #7fffd4;">null</span>;
+        dbRandFile = <span style="color: #7fffd4;">null</span>;
+    } <span style="color: #fa8072;">catch</span> (<span style="color: #9acd32; font-weight: bold;">IOException</span> <span style="color: #7fffd4; font-weight: bold;">e</span>) {
+        log.error(<span style="color: #ffa07a;">"close logindex file error:"</span>, e);
+    }
+}
+</pre>
+</div>
+<p>
+这样做设计的好处是，无论你程序因为被kill还是非正常jvm退出等，都不会丢消息，都被合理的保存在文件中，在下次启动的时候，启动从上次数据处开始。
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-3" class="outline-4">
+<h4 id="sec-3-2-3">Streaming-Style HBase客户端封装 HClient</h4>
+<div class="outline-text-4" id="text-3-2-3">
+<p>
+对于hbase客户端，采用streaming-style的接口风格封装HBase客户端.<br  />
+DEMO: <br  />
+</p>
+<div class="org-src-container">
+
+<pre class="src src-java"><span style="color: #add8e6;">// </span><span style="color: #add8e6;">demo</span>
+<span style="color: #9acd32; font-weight: bold;">HClient</span> <span style="color: #7fffd4; font-weight: bold;">hClient</span> = HClientFactory.builder().connectString(<span style="color: #ffa07a;">"zookeeper1, zookeeper2, zookeeper3"</span>).table(<span style="color: #ffa07a;">"tableName"</span>.getBytes()).build();
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-4" class="outline-4">
+<h4 id="sec-3-2-4">监控 Monitor</h4>
+<div class="outline-text-4" id="text-3-2-4">
+<p>
+在程序启动后，除了使用jstack， jmap等查看程序启动堆栈，内存信息外。<br  />
+如何有效的查看程序内部变量信息，甚至在Runtime修改变量，如动态更改日志级别等。<br  />
+简单介绍下kafka2hbase的实现方式（，当然还有很多好的方式，私下可mail我zhuyu.deng@yeepay.com告诉你，哈哈.）<br  />
+首先定义接口,凡是实现这个接口的表示可被监控的。
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-JAVA">import java.io.IOException;
+
+/**
+ * @author Jerry
+ */
+public interface Dumpable {
+
+    String dump();
+
+    void dump(Appendable out, String indent) throws IOException;
+
+}
+</pre>
+</div>
+
+
+<p>
+所有需要被监控的对象都实现这个接口， 比如HBaseHandler需要被实时监控.<br  />
+则把所有需要被监控的信息在dump(Appendable out, String indent)中追加到 append 
+</p>
+
+<div class="org-src-container">
+
+<pre class="src src-java"><span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">org</span>.<span style="color: #7fffd4;">jerry</span>.<span style="color: #7fffd4;">bigdatakafka2hbase</span>.<span style="color: #7fffd4;">hclient</span>.<span style="color: #7fffd4;">hbase</span>.<span style="color: #9acd32; font-weight: bold;">HClient</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">org</span>.<span style="color: #7fffd4;">jerry</span>.<span style="color: #7fffd4;">bigdatakafka2hbase</span>.<span style="color: #7fffd4;">kafka</span>.<span style="color: #9acd32; font-weight: bold;">MessageHandler</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">org</span>.<span style="color: #7fffd4;">jerry</span>.<span style="color: #7fffd4;">bigdatakafka2hbase</span>.<span style="color: #7fffd4;">parser</span>.<span style="color: #9acd32; font-weight: bold;">RowEvent</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">org</span>.<span style="color: #7fffd4;">jerry</span>.<span style="color: #7fffd4;">bigdatakafka2hbase</span>.<span style="color: #7fffd4;">parser</span>.<span style="color: #9acd32; font-weight: bold;">TransEvent</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">org</span>.<span style="color: #7fffd4;">apache</span>.<span style="color: #7fffd4;">log4j</span>.<span style="color: #9acd32; font-weight: bold;">Logger</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">org</span>.<span style="color: #7fffd4;">codehaus</span>.<span style="color: #7fffd4;">jackson</span>.<span style="color: #7fffd4;">map</span>.<span style="color: #9acd32; font-weight: bold;">ObjectMapper</span>;
+
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">java</span>.<span style="color: #7fffd4;">io</span>.<span style="color: #9acd32; font-weight: bold;">IOException</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">java</span>.<span style="color: #7fffd4;">util</span>.<span style="color: #9acd32; font-weight: bold;">Map</span>;
+
+
+<span style="color: #fa8072;">public</span> <span style="color: #fa8072;">class</span> <span style="color: #9acd32; font-weight: bold;">HBaseHandler</span> <span style="color: #fa8072;">implements</span> <span style="color: #9acd32; font-weight: bold;">Dumpable</span> {
+
+    <span style="color: #fa8072;">private</span> <span style="color: #fa8072;">static</span> <span style="color: #fa8072;">final</span> <span style="color: #9acd32; font-weight: bold;">Logger</span> <span style="color: #7fffd4; font-weight: bold;">LOGGER</span> = Logger.getLogger(HBaseHandler.<span style="color: #fa8072;">class</span>);
+    <span style="color: #fa8072;">private</span> <span style="color: #fa8072;">static</span> <span style="color: #fa8072;">final</span> <span style="color: #9acd32; font-weight: bold;">ObjectMapper</span> <span style="color: #7fffd4; font-weight: bold;">objectMapper</span> = <span style="color: #fa8072;">new</span> <span style="color: #9acd32; font-weight: bold;">ObjectMapper</span>();
+    <span style="color: #fa8072;">private</span> <span style="color: #fa8072;">final</span> <span style="color: #9acd32; font-weight: bold;">Map</span>&lt;<span style="color: #9acd32; font-weight: bold;">String</span>, <span style="color: #9acd32; font-weight: bold;">HClient</span>&gt; <span style="color: #7fffd4; font-weight: bold;">hClientMap</span>;
+
+    <span style="color: #fa8072;">public</span> <span style="color: #7fffd4; font-weight: bold;">HBaseHandler</span>(<span style="color: #9acd32; font-weight: bold;">Map</span>&lt;<span style="color: #9acd32; font-weight: bold;">String</span>, <span style="color: #9acd32; font-weight: bold;">HClient</span>&gt; <span style="color: #7fffd4; font-weight: bold;">hClientMap</span>) {
+        <span style="color: #fa8072;">this</span>.hClientMap = hClientMap;
+    }
+
+    <span style="color: #fa8072;">private</span> <span style="color: #9acd32; font-weight: bold;">String</span> <span style="color: #7fffd4; font-weight: bold;">currentMsg</span>;
+    <span style="color: #fa8072;">private</span> <span style="color: #9acd32; font-weight: bold;">int</span> <span style="color: #7fffd4; font-weight: bold;">currentRowEventSize</span>;
+    <span style="color: #fa8072;">public</span> <span style="color: #9acd32; font-weight: bold;">void</span> <span style="color: #7fffd4; font-weight: bold;">handler</span>(<span style="color: #9acd32; font-weight: bold;">String</span> <span style="color: #7fffd4; font-weight: bold;">message</span>) <span style="color: #fa8072;">throws</span> <span style="color: #9acd32; font-weight: bold;">IOException</span> {
+
+        currentMsg = <span style="color: #fa8072;">new</span> <span style="color: #9acd32; font-weight: bold;">String</span>(message);
+        <span style="color: #9acd32; font-weight: bold;">TransEvent</span> <span style="color: #7fffd4; font-weight: bold;">transEvent</span> = objectMapper.readValue(message, TransEvent.<span style="color: #fa8072;">class</span>);
+        currentRowEventSize = transEvent.getRowEvents().size();
+        <span style="color: #fa8072;">for</span> (<span style="color: #9acd32; font-weight: bold;">RowEvent</span> <span style="color: #7fffd4; font-weight: bold;">rowEvent</span> : transEvent.getRowEvents()) {
+            <span style="color: #9acd32; font-weight: bold;">String</span> <span style="color: #7fffd4; font-weight: bold;">table</span> = rowEvent.getTableName();
+            <span style="color: #9acd32; font-weight: bold;">Map</span>&lt;<span style="color: #9acd32; font-weight: bold;">String</span>, <span style="color: #9acd32; font-weight: bold;">String</span>&gt; <span style="color: #7fffd4; font-weight: bold;">afterVals</span> = rowEvent.getAfterValues();
+            <span style="color: #fa8072;">if</span> (LOGGER.isDebugEnabled()) {
+                LOGGER.debug(<span style="color: #ffa07a;">"afterVal : "</span> + afterVals);
+                LOGGER.debug(<span style="color: #ffa07a;">"table    : "</span> + table);
+            }
+            <span style="color: #fa8072;">try</span> {
+                <span style="color: #9acd32; font-weight: bold;">HClient</span> <span style="color: #7fffd4; font-weight: bold;">hClient</span> = hClientMap.get(table);
+                <span style="color: #fa8072;">if</span> (hClient == <span style="color: #7fffd4;">null</span>) {
+                    <span style="color: #fa8072;">if</span> (LOGGER.isDebugEnabled()) {
+                        LOGGER.info(<span style="color: #ffa07a;">"hclient is null : "</span> + table);
+                    }
+                    <span style="color: #fa8072;">return</span>;
+                }
+                hClient.putRow(afterVals);
+            } <span style="color: #fa8072;">catch</span> (<span style="color: #9acd32; font-weight: bold;">Exception</span> <span style="color: #7fffd4; font-weight: bold;">e</span>) {
+                e.printStackTrace();
+                LOGGER.error(<span style="color: #ffa07a;">"hbase put error : "</span> + e);
+            }
+        }
+
+    }
+
+    <span style="color: #7fffd4;">@Override</span>
+    <span style="color: #fa8072;">public</span> <span style="color: #9acd32; font-weight: bold;">String</span> <span style="color: #7fffd4; font-weight: bold;">dump</span>() {
+        <span style="color: #fa8072;">return</span> <span style="color: #7fffd4;">null</span>;
+    }
+
+    <span style="color: #7fffd4;">@Override</span>
+    <span style="color: #fa8072;">public</span> <span style="color: #9acd32; font-weight: bold;">void</span> <span style="color: #7fffd4; font-weight: bold;">dump</span>(<span style="color: #9acd32; font-weight: bold;">Appendable</span> <span style="color: #7fffd4; font-weight: bold;">out</span>, <span style="color: #9acd32; font-weight: bold;">String</span> <span style="color: #7fffd4; font-weight: bold;">indent</span>) <span style="color: #fa8072;">throws</span> <span style="color: #9acd32; font-weight: bold;">IOException</span> {
+        out.append(<span style="color: #ffa07a;">"------------------------------------------------------------------------------------------\n"</span>);
+        out.append(<span style="color: #ffa07a;">"hbase handler : "</span> + currentMsg + <span style="color: #ffa07a;">"\n"</span>);
+        out.append(<span style="color: #ffa07a;">"hbase handler : "</span> + currentRowEventSize + <span style="color: #ffa07a;">"\n"</span>);
+        out.append(<span style="color: #ffa07a;">"------------------------------------------------------------------------------------------\n"</span>);
+
+    }
+}
+</pre>
+</div>
+
+<ul class="org-ul">
+<li>所有实现了Dumpable接口的对象，最终都会被add到这个Monitor中。<br  />
+</li>
+</ul>
+<p>
+于是，我们在启动程序的时候就会对外暴露一个接口，安全起见，现在只对外提供只读权限。<br  />
+你就可以看到所有内部变量，对你自己的程序了如指掌。<br  />
+</p>
+<div class="org-src-container">
+
+<pre class="src src-java"><span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">com</span>.<span style="color: #7fffd4;">yeepay</span>.<span style="color: #7fffd4;">bigdatakafka2hbase</span>.<span style="color: #7fffd4;">config</span>.<span style="color: #9acd32; font-weight: bold;">MonitorConfig</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">org</span>.<span style="color: #7fffd4;">slf4j</span>.<span style="color: #9acd32; font-weight: bold;">Logger</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">org</span>.<span style="color: #7fffd4;">slf4j</span>.<span style="color: #9acd32; font-weight: bold;">LoggerFactory</span>;
+
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">java</span>.<span style="color: #7fffd4;">io</span>.<span style="color: #9acd32; font-weight: bold;">BufferedReader</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">java</span>.<span style="color: #7fffd4;">io</span>.<span style="color: #9acd32; font-weight: bold;">IOException</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">java</span>.<span style="color: #7fffd4;">io</span>.<span style="color: #9acd32; font-weight: bold;">InputStreamReader</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">java</span>.<span style="color: #7fffd4;">io</span>.<span style="color: #9acd32; font-weight: bold;">PrintStream</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">java</span>.<span style="color: #7fffd4;">net</span>.<span style="color: #9acd32; font-weight: bold;">ServerSocket</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">java</span>.<span style="color: #7fffd4;">net</span>.<span style="color: #9acd32; font-weight: bold;">Socket</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">java</span>.<span style="color: #7fffd4;">util</span>.<span style="color: #9acd32; font-weight: bold;">List</span>;
+<span style="color: #fa8072;">import</span> <span style="color: #7fffd4;">java</span>.<span style="color: #7fffd4;">util</span>.<span style="color: #7fffd4;">concurrent</span>.<span style="color: #9acd32; font-weight: bold;">CopyOnWriteArrayList</span>;
+
+<span style="color: #ffa07a;">/**</span>
+<span style="color: #ffa07a;"> * </span><span style="color: #7fffd4;">@author</span><span style="color: #ffa07a;"> Jerry</span>
+<span style="color: #ffa07a;"> */</span>
+<span style="color: #fa8072;">public</span> <span style="color: #fa8072;">class</span> <span style="color: #9acd32; font-weight: bold;">Monitor</span> <span style="color: #fa8072;">extends</span> <span style="color: #9acd32; font-weight: bold;">Thread</span> <span style="color: #fa8072;">implements</span> <span style="color: #9acd32; font-weight: bold;">LifeCycle</span> {
+
+    <span style="color: #fa8072;">private</span> <span style="color: #fa8072;">static</span> <span style="color: #fa8072;">final</span> <span style="color: #9acd32; font-weight: bold;">Logger</span> <span style="color: #7fffd4; font-weight: bold;">LOGGER</span> = LoggerFactory.getLogger(Monitor.<span style="color: #fa8072;">class</span>);
+    <span style="color: #fa8072;">private</span> <span style="color: #fa8072;">static</span> <span style="color: #9acd32; font-weight: bold;">int</span> <span style="color: #7fffd4; font-weight: bold;">DEFAULT_LISTENING_PORT</span> = Integer.parseInt(MonitorConfig.getMonitorConfig().get(<span style="color: #ffa07a;">"port"</span>));  <span style="color: #add8e6;">// </span><span style="color: #add8e6;">&#22312;&#32447;</span>
+    <span style="color: #fa8072;">private</span> <span style="color: #9acd32; font-weight: bold;">List</span>&lt;<span style="color: #9acd32; font-weight: bold;">Dumpable</span>&gt; <span style="color: #7fffd4; font-weight: bold;">list</span> = <span style="color: #fa8072;">new</span> <span style="color: #9acd32; font-weight: bold;">CopyOnWriteArrayList</span>&lt;<span style="color: #9acd32; font-weight: bold;">Dumpable</span>&gt;();
+    <span style="color: #fa8072;">protected</span> <span style="color: #9acd32; font-weight: bold;">int</span> <span style="color: #7fffd4; font-weight: bold;">serverPort</span> = DEFAULT_LISTENING_PORT;
+    <span style="color: #fa8072;">private</span> <span style="color: #9acd32; font-weight: bold;">ServerSocket</span> <span style="color: #7fffd4; font-weight: bold;">serverSocket</span>;
+
+    <span style="color: #fa8072;">public</span> <span style="color: #7fffd4; font-weight: bold;">Monitor</span>() {
+    }
+
+    <span style="color: #fa8072;">public</span> <span style="color: #7fffd4; font-weight: bold;">Monitor</span>(<span style="color: #9acd32; font-weight: bold;">int</span> <span style="color: #7fffd4; font-weight: bold;">port</span>) {
+        serverPort = port;
+    }
+
+    <span style="color: #fa8072;">public</span> <span style="color: #9acd32; font-weight: bold;">void</span> <span style="color: #7fffd4; font-weight: bold;">addMonitored</span>(<span style="color: #9acd32; font-weight: bold;">Dumpable</span> <span style="color: #7fffd4; font-weight: bold;">m_</span>) {
+        list.add(m_);
+    }
+
+    <span style="color: #fa8072;">public</span> <span style="color: #9acd32; font-weight: bold;">void</span> <span style="color: #7fffd4; font-weight: bold;">run</span>() {
+        <span style="color: #fa8072;">try</span> {
+            serverSocket = <span style="color: #fa8072;">new</span> <span style="color: #9acd32; font-weight: bold;">ServerSocket</span>(serverPort);
+        } <span style="color: #fa8072;">catch</span> (<span style="color: #9acd32; font-weight: bold;">IOException</span> <span style="color: #7fffd4; font-weight: bold;">e</span>) {
+            LOGGER.error(<span style="color: #ffa07a;">"cannot create server socket on port "</span> + serverPort, e);
+            <span style="color: #fa8072;">return</span>;
+        }
+        <span style="color: #fa8072;">while</span> (<span style="color: #7fffd4;">true</span>) {
+            <span style="color: #9acd32; font-weight: bold;">Socket</span> <span style="color: #7fffd4; font-weight: bold;">socket</span>;
+            <span style="color: #fa8072;">try</span> {
+                socket = serverSocket.accept();
+            } <span style="color: #fa8072;">catch</span> (<span style="color: #9acd32; font-weight: bold;">IOException</span> <span style="color: #7fffd4; font-weight: bold;">e</span>) {
+                LOGGER.error(<span style="color: #ffa07a;">"cannot accept socket"</span>, e);
+                <span style="color: #fa8072;">return</span>;
+            }
+            <span style="color: #fa8072;">try</span> {
+                <span style="color: #9acd32; font-weight: bold;">String</span> <span style="color: #7fffd4; font-weight: bold;">line</span>;
+                <span style="color: #9acd32; font-weight: bold;">BufferedReader</span> <span style="color: #7fffd4; font-weight: bold;">reader</span> = <span style="color: #fa8072;">new</span> <span style="color: #9acd32; font-weight: bold;">BufferedReader</span>(<span style="color: #fa8072;">new</span> <span style="color: #9acd32; font-weight: bold;">InputStreamReader</span>(socket.getInputStream()));
+                <span style="color: #9acd32; font-weight: bold;">PrintStream</span> <span style="color: #7fffd4; font-weight: bold;">out</span> = <span style="color: #fa8072;">new</span> <span style="color: #9acd32; font-weight: bold;">PrintStream</span>(socket.getOutputStream());
+                <span style="color: #fa8072;">while</span> ((line = reader.readLine()) != <span style="color: #7fffd4;">null</span>) {
+                    <span style="color: #fa8072;">if</span> (line.startsWith(<span style="color: #ffa07a;">"p"</span>)) {
+                        <span style="color: #fa8072;">for</span> (<span style="color: #9acd32; font-weight: bold;">Dumpable</span> <span style="color: #7fffd4; font-weight: bold;">m</span> : list) {
+                            m.dump(out, <span style="color: #ffa07a;">"------------\n"</span>);
+                        }
+                    }
+                }
+                socket.close();
+            } <span style="color: #fa8072;">catch</span> (<span style="color: #9acd32; font-weight: bold;">Throwable</span> <span style="color: #7fffd4; font-weight: bold;">e</span>) {
+                LOGGER.error(e.getMessage(), e);
+            }
+        }
+    }
+
+    <span style="color: #fa8072;">public</span> <span style="color: #9acd32; font-weight: bold;">void</span> <span style="color: #7fffd4; font-weight: bold;">destroy</span>() {
+        <span style="color: #fa8072;">if</span> (serverSocket != <span style="color: #7fffd4;">null</span>) {
+            <span style="color: #fa8072;">try</span> {
+                serverSocket.close();
+            } <span style="color: #fa8072;">catch</span> (<span style="color: #9acd32; font-weight: bold;">IOException</span> <span style="color: #7fffd4; font-weight: bold;">e</span>) {
+                e.printStackTrace();
+            }
+        }
+        LOGGER.info(<span style="color: #ffa07a;">"monitor stoped at : "</span> + System.currentTimeMillis());
+
+    }
+}
+</pre>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-3-2-5" class="outline-4">
+<h4 id="sec-3-2-5">工程结构（基于maven）</h4>
+<div class="outline-text-4" id="text-3-2-5">
+<pre class="example">
+--------------------------------------------------------------------源码树----------------------
+com
+    └── yeepay
+        └── bigdatakafka2hbase
+            ├── BootStrap.java
+            ├── Start.java
+            ├── config
+            │   ├── HBaseConfig.java
+            │   ├── KafkaConfig.java
+            │   ├── MarkConfig.java
+            │   ├── MonitorConfig.java
+            │   └── TableConfig.java
+            ├── handler
+            │   ├── HBaseHandler.java
+            │   ├── HBaseMarkerHandler.java
+            │   ├── HandlerFacade.java
+            │   └── MarkHandler.java
+            ├── hclient
+            │   ├── ConfigurationFactory.java
+            │   ├── HBaseConstants.java
+            │   ├── HBaseFactoryProvider.java
+            │   ├── HClient.java
+            │   ├── HClientFactory.java
+            │   ├── HConnectionFactory.java
+            │   └── HTableFactory.java
+            ├── kafka
+            │   ├── ConsumerRun.java
+            │   ├── KafkaConsumerUtil.java
+            │   └── MessageHandler.java
+            ├── mark
+            │   ├── MappedByteBufferUtil.java
+            │   └── Marker.java
+            ├── monitor
+            │   ├── Dumpable.java
+            │   ├── JVMMonitor.java
+            │   ├── LifeCycle.java
+            │   └── Monitor.java
+            ├── parser
+            │   ├── EventType.java
+            │   ├── NullTransEvent.java
+            │   ├── RowEvent.java
+            │   └── TransEvent.java
+            └── utils
+                └── InstanceResolver.java
+</pre>
+
+
+<div class="figure">
+<p><img src="./img/cmatrix.png" alt="cmatrix.png" />
+</p>
+<p><span class="figure-number">Figure 2:</span> 此图表示了各个类之间的依赖关系</p>
+</div>
+
+<pre class="example">
+--------------------------------------------------------------------package 树----------------------
+          readme:
+                  1. 配置你的kakfa信息，写明zookeeper地址，group, topic.         kafka.properties
+                  2. 配置hbase信息， 写明zookeeper（不一定与kafka同一个zookeeper）hbase.properties
+                  3. 配置需要同步到hbase的表                                    tbl.config
+                  4. 配置监控端口                                              monitor.properties
+                  5. 程序启动：nohup ./start &amp;
+
+├── bin
+│   ├── mark-test.sh
+│   └── start.sh
+├── conf
+│   ├── core-site.xml
+│   ├── hbase-site.xml
+│   ├── hbase.properties
+│   ├── hdfs-site.xml
+│   ├── kafkaconfig.properties
+│   ├── monitor.properties
+│   └── tbl.config
+└── lib
+    ├── async-1.3.1.jar
+    ├── cloudera-jets3t-2.0.0-cdh4.6.0.jar
+    ├── commons-collections-3.2.1.jar
+    ├── commons-compress-1.4.1.jar
+    ├── jackson-mapper-asl-1.8.8.jar
+    ├── jackson-mapper-lgpl-1.9.13.jar
+    ├── jackson-xc-1.8.8.jar
+    ├── jamon-runtime-2.3.1.jar
+    ├── kafka-clients-0.8.2.0.jar
+    ├── kafka2hbase-1.0-SNAPSHOT.jar
+    ├── kafka_2.10-0.8.2.0.jar
+    ├── kfs-0.3.jar
+    ├── libthrift-0.9.0.jar
+    ├── log4j-1.2.17.jar
+    ├── log4j-over-slf4j-1.7.2.jar
+    ├── protobuf-java-2.4.0a.jar
+    ├── slf4j-api-1.7.2.jar
+    ├── slf4j-log4j12-1.7.2.jar
+    ├── .
+    ├── .
+    ├── .
+    ├── zkclient-0.3.jar
+    └── zookeeper-3.4.5-cdh4.6.0.jar
+</pre>
+</div>
+</div>
+</div>
+</div>
+
+<div id="outline-container-sec-4" class="outline-2">
+<h2 id="sec-4">参考</h2>
+<div class="outline-text-2" id="text-4">
+<p>
+kafka设计<br  />
+zookeeper设计
+</p>
+</div>
+</div>
+</div>
+<div id="postamble" class="status">
+<p>
+     <a href="mailto:zhuyu.deng@gmail.com?Subject=Comments on (Kafka2HBase设计概要)">Send a feedback</a>
+     </p>
+
+     <p>
+     <span class="date">Created: 2015-07-19 Sun 12:08</span> by <span class="creator"> Jerry </span>
+     </p>
+</div>
+</body>
+</html>
